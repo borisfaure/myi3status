@@ -8,8 +8,10 @@ import (
     "net/http"
     "os"
     "strings"
+    "syscall"
     "time"
 )
+const STATUS_LEN int = 12
 
 func get_status_from_http(code string) (string, error) {
     var url string = "http://www.meteofrance.com/mf3-rpc-portlet/rest/pluie/" + code
@@ -45,7 +47,7 @@ func get_status_from_http(code string) (string, error) {
         return "", errors.New("can not find 'dataCadran' in JSON")
     }
     var b strings.Builder
-    b.Grow(12)
+    b.Grow(STATUS_LEN)
     for _, v := range dataCadran {
         var pluie, ok = v.(map[string]interface{})
         if !ok {
@@ -72,24 +74,34 @@ func get_status_from_http(code string) (string, error) {
     return b.String(), nil
 }
 
-func read_status_from_file(file_path string) (string,  error) {
-    var content, err = ioutil.ReadFile(file_path)
+func read_status_from_file_no_lock(f *os.File) (string,  error) {
+    var buf = make([]byte, STATUS_LEN)
+    var _, err = f.Read(buf)
     if err != nil {
         return "", err
     }
-    return string(content), nil
+    return string(buf), nil
 }
 
-func write_status_to_file_no_lock(file_path string, status string) (error) {
-    return ioutil.WriteFile(file_path, []byte(status), 0644)
+func write_status_to_file_no_lock(f *os.File, status string) (error) {
+    var truncateErr = f.Truncate(0)
+    if truncateErr != nil {
+        return truncateErr
+    }
+    var _, writeErr = f.WriteString(status)
+    if writeErr != nil {
+        return writeErr
+    }
+    var syncErr = f.Sync()
+    return syncErr
 }
 
-func need_new_status(file_path string, code string) (string , error) {
+func need_new_status(f *os.File, code string) (string , error) {
     var status, err = get_status_from_http(code)
     if err != nil {
         return "", err
     }
-    var writeErr = write_status_to_file_no_lock(file_path, status)
+    var writeErr = write_status_to_file_no_lock(f, status)
     if writeErr != nil {
         return "", writeErr
     }
@@ -99,16 +111,31 @@ func need_new_status(file_path string, code string) (string , error) {
 
 func get_status(code string) (string, error) {
     var file_path string = "/tmp/pluie_dans_lheure." + code
-    var st, err = os.Stat(file_path)
-    if os.IsNotExist(err) {
-        return need_new_status(file_path, code)
+
+    var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
+    if openErr != nil {
+        return "", nil
+    }
+    defer f.Close()
+    var fd = f.Fd()
+
+    /* Flock */
+    var flockErr = syscall.Flock(int(fd), syscall.LOCK_EX)
+    if flockErr != nil {
+        return "",  nil
+    }
+    defer syscall.Flock(int(fd), syscall.LOCK_UN)
+
+    var st, statErr = f.Stat()
+    if statErr != nil {
+        return "", nil
     }
     var t_hour, t_min, _ int = st.ModTime().Clock()
     var now_hour, now_min, _ int = time.Now().Clock()
-    if t_hour != now_hour || t_min/5 != now_min/5 {
-        return need_new_status(file_path, code)
+    if st.Size() < int64(STATUS_LEN) || t_hour != now_hour || t_min/5 != now_min/5 {
+        return need_new_status(f, code)
     }
-    return read_status_from_file(file_path)
+    return read_status_from_file_no_lock(f)
 }
 
 func main() {
