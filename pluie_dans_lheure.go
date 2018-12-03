@@ -6,11 +6,12 @@ import (
     "io/ioutil"
     "log"
     "net/http"
+    "os"
     "strings"
     "time"
 )
 
-func get_status(code string) (string, error) {
+func get_status_from_http(code string) (string, error) {
     var url string = "http://www.meteofrance.com/mf3-rpc-portlet/rest/pluie/" + code
 
     clt := http.Client{
@@ -69,6 +70,45 @@ func get_status(code string) (string, error) {
     }
 
     return b.String(), nil
+}
+
+func read_status_from_file(file_path string) (string,  error) {
+    var content, err = ioutil.ReadFile(file_path)
+    if err != nil {
+        return "", err
+    }
+    return string(content), nil
+}
+
+func write_status_to_file_no_lock(file_path string, status string) (error) {
+    return ioutil.WriteFile(file_path, []byte(status), 0644)
+}
+
+func need_new_status(file_path string, code string) (string , error) {
+    var status, err = get_status_from_http(code)
+    if err != nil {
+        return "", err
+    }
+    var writeErr = write_status_to_file_no_lock(file_path, status)
+    if writeErr != nil {
+        return "", writeErr
+    }
+    return status, nil
+}
+
+
+func get_status(code string) (string, error) {
+    var file_path string = "/tmp/pluie_dans_lheure." + code
+    var st, err = os.Stat(file_path)
+    if os.IsNotExist(err) {
+        return need_new_status(file_path, code)
+    }
+    var t_hour, t_min, _ int = st.ModTime().Clock()
+    var now_hour, now_min, _ int = time.Now().Clock()
+    if t_hour != now_hour || t_min/5 != now_min/5 {
+        return need_new_status(file_path, code)
+    }
+    return read_status_from_file(file_path)
 }
 
 func main() {
