@@ -2,9 +2,7 @@ package main
 import (
     "encoding/json"
     "errors"
-    "fmt"
     "io/ioutil"
-    "log"
     "net/http"
     "os"
     "strings"
@@ -47,7 +45,7 @@ func get_status_from_http(code string) (string, error) {
         return "", errors.New("can not find 'dataCadran' in JSON")
     }
     var b strings.Builder
-    b.Grow(STATUS_LEN)
+    b.Grow(STATUS_LEN * 4 /* to account for unicode character */)
     for _, v := range dataCadran {
         var pluie, ok = v.(map[string]interface{})
         if !ok {
@@ -75,7 +73,7 @@ func get_status_from_http(code string) (string, error) {
 }
 
 func read_status_from_file_no_lock(f *os.File) (string,  error) {
-    var buf = make([]byte, STATUS_LEN)
+    var buf = make([]byte, STATUS_LEN*4) // to account for unicode characters
     var _, err = f.Read(buf)
     if err != nil {
         return "", err
@@ -109,7 +107,7 @@ func need_new_status(f *os.File, code string) (string , error) {
 }
 
 
-func get_status(code string) (string, error) {
+func GetRain(code string) (string, error) {
     var file_path string = "/tmp/pluie_dans_lheure." + code
 
     var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
@@ -138,10 +136,21 @@ func get_status(code string) (string, error) {
     return read_status_from_file_no_lock(f)
 }
 
-func main() {
-    status, err := get_status("920440")
-    if err != nil {
-        log.Fatal(err)
+func GetRainI3barFormat(code string, rain_color string) (string, error) {
+    status, rainErr := GetRain(code)
+    if rainErr != nil {
+        return "", rainErr
     }
-    fmt.Printf("->'%v'\n", status)
+    /* Poor man's json encoder */
+    var b strings.Builder
+    b.WriteString("{\"full_text\":\"")
+    b.WriteString(status)
+    b.WriteString("\"")
+    if status != "____________" {
+        b.WriteString(",\"color\":\"")
+        b.WriteString(rain_color)
+        b.WriteString("\"")
+    }
+    b.WriteString("}")
+    return b.String(), nil
 }
