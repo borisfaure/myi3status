@@ -72,8 +72,8 @@ func get_status_from_http(code string) (string, error) {
     return b.String(), nil
 }
 
-func read_status_from_file_no_lock(f *os.File) (string,  error) {
-    var buf = make([]byte, STATUS_LEN*4) // to account for unicode characters
+func read_status_from_file_no_lock(f *os.File, file_length int64) (string,  error) {
+    var buf = make([]byte, file_length) // to account for unicode characters
     var _, err = f.Read(buf)
     if err != nil {
         return "", err
@@ -133,7 +133,7 @@ func GetRain(code string) (string, error) {
     if st.Size() < int64(STATUS_LEN) || t_hour != now_hour || t_min/5 != now_min/5 {
         return need_new_status(f, code)
     }
-    return read_status_from_file_no_lock(f)
+    return read_status_from_file_no_lock(f, st.Size())
 }
 
 func GetRainI3barFormat(code string, rain_color string) (string, error) {
