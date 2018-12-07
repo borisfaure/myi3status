@@ -11,8 +11,8 @@ import (
 )
 const STATUS_LEN int = 12
 
-func get_status_from_http(code string) (string, error) {
-    var url string = "http://www.meteofrance.com/mf3-rpc-portlet/rest/pluie/" + code
+func get_status_from_http(code *string) (string, error) {
+    var url string = "http://www.meteofrance.com/mf3-rpc-portlet/rest/pluie/" + *code
 
     clt := http.Client{
         Timeout: time.Second * 2, // Maximum of 2 secs
@@ -94,7 +94,7 @@ func write_status_to_file_no_lock(f *os.File, status string) (error) {
     return syncErr
 }
 
-func need_new_status(f *os.File, code string) (string , error) {
+func need_new_status(f *os.File, code *string) (string , error) {
     var status, err = get_status_from_http(code)
     if err != nil {
         return "", err
@@ -107,8 +107,8 @@ func need_new_status(f *os.File, code string) (string , error) {
 }
 
 
-func GetRain(code string) (string, error) {
-    var file_path string = "/tmp/pluie_dans_lheure." + code
+func GetRain(code *string) (string, error) {
+    var file_path string = "/tmp/pluie_dans_lheure." + *code
 
     var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
     if openErr != nil {
@@ -136,7 +136,7 @@ func GetRain(code string) (string, error) {
     return read_status_from_file_no_lock(f, st.Size())
 }
 
-func GetRainI3barFormat(code string, rain_color string) (string, error) {
+func GetRainI3barFormat(code *string, rain_color *string) (string, error) {
     status, rainErr := GetRain(code)
     if rainErr != nil {
         return "", rainErr
@@ -148,7 +148,7 @@ func GetRainI3barFormat(code string, rain_color string) (string, error) {
     b.WriteString("\"")
     if status != "____________" {
         b.WriteString(",\"color\":\"")
-        b.WriteString(rain_color)
+        b.WriteString(*rain_color)
         b.WriteString("\"")
     }
     b.WriteString("}")
