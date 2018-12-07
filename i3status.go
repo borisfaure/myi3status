@@ -2,12 +2,13 @@ package main
 import (
     "bufio"
     "errors"
+    "flag"
     "fmt"
     "log"
     "os/exec"
 )
 
-func main_loop(weather_code string, rain_color string) error {
+func main_loop(weather_code *string, rain_color *string) error {
     path, lookupErr := exec.LookPath("i3status")
     if lookupErr != nil {
         return lookupErr
@@ -47,15 +48,19 @@ func main_loop(weather_code string, rain_color string) error {
 
     first := true
     for scanner.Scan() {
-        weather, errStatus := GetRainI3barFormat(weather_code, rain_color)
         text := scanner.Text()
-        if errStatus != nil {
-            fmt.Println(text)
-        } else if first {
-            fmt.Println("["+weather+","+text[1:])
-            first = false
+        if weather_code != nil {
+            weather, errStatus := GetRainI3barFormat(weather_code, rain_color)
+            if errStatus != nil {
+                fmt.Println(text)
+            } else if first {
+                fmt.Println("["+weather+","+text[1:])
+                first = false
+            } else {
+                fmt.Println(",["+weather+","+text[2:])
+            }
         } else {
-            fmt.Println(",["+weather+","+text[2:])
+            fmt.Println(text)
         }
     }
 
@@ -63,8 +68,15 @@ func main_loop(weather_code string, rain_color string) error {
 }
 
 func main() {
-    //err := main_loop("920440", "#268bd2")
-    err := main_loop("711760", "#268bd2")
+    weatherCode := flag.String("weather_code", "",
+        "a location code for the Pluie dans l'heure API")
+    rainColor := flag.String("rain_color", "#268bd2",
+        "Color to display text when it's raining")
+    flag.Parse()
+    if *weatherCode == "" {
+        weatherCode = nil
+    }
+    err := main_loop(weatherCode, rainColor)
     if err != nil {
         log.Fatal(err)
     }
