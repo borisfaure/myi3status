@@ -1,0 +1,8 @@
+a wrapper on i3status written in go
+
+
+Main Feature
+============
+
+Display whether it'll rain in the next hour in one of the supported places in
+France.
