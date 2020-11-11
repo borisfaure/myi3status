@@ -149,9 +149,17 @@ func write_status_to_file_no_lock(f *os.File, status string) (error) {
     return syncErr
 }
 
-func need_new_status(f *os.File, code *string) (string , error) {
-    var status, err = get_status_from_http(code)
+func need_new_status(f *os.File, location *string) (string , error) {
+    var status, err = get_status_from_http(location)
     if err != nil {
+        var file_path string = "/tmp/pluie_dans_lheure.err"
+
+        var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
+        if openErr != nil {
+            return "", nil
+        }
+        defer f.Close()
+        f.WriteString(err.Error())
         return "", err
     }
     var writeErr = write_status_to_file_no_lock(f, status)
@@ -162,8 +170,8 @@ func need_new_status(f *os.File, code *string) (string , error) {
 }
 
 
-func GetRain(code *string) (string, error) {
-    var file_path string = "/tmp/pluie_dans_lheure." + *code
+func GetRain(location *string) (string, error) {
+    var file_path string = "/tmp/pluie_dans_lheure"
 
     var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
     if openErr != nil {
@@ -186,13 +194,13 @@ func GetRain(code *string) (string, error) {
     var t_hour, t_min, _ int = st.ModTime().Clock()
     var now_hour, now_min, _ int = time.Now().Clock()
     if st.Size() < int64(STATUS_LEN) || t_hour != now_hour || t_min/5 != now_min/5 {
-        return need_new_status(f, code)
+        return need_new_status(f, location)
     }
     return read_status_from_file_no_lock(f, st.Size())
 }
 
-func GetRainI3barFormat(code *string, rain_color *string) (string, error) {
-    status, rainErr := GetRain(code)
+func GetRainI3barFormat(location *string, rain_color *string) (string, error) {
+    status, rainErr := GetRain(location)
     if rainErr != nil {
         return "", rainErr
     }
