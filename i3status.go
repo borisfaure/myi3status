@@ -8,7 +8,7 @@ import (
     "os/exec"
 )
 
-func main_loop(weather_code *string, rain_color *string) error {
+func main_loop(location *string, rain_color *string) error {
     path, lookupErr := exec.LookPath("i3status")
     if lookupErr != nil {
         return lookupErr
@@ -49,8 +49,8 @@ func main_loop(weather_code *string, rain_color *string) error {
     first := true
     for scanner.Scan() {
         text := scanner.Text()
-        if weather_code != nil {
-            weather, errStatus := GetRainI3barFormat(weather_code, rain_color)
+        if location != nil {
+            weather, errStatus := GetRainI3barFormat(location, rain_color)
             if errStatus != nil {
                 fmt.Println(text)
             } else if first {
@@ -68,15 +68,15 @@ func main_loop(weather_code *string, rain_color *string) error {
 }
 
 func main() {
-    weatherCode := flag.String("weather_code", "",
-        "a location code for the Pluie dans l'heure API")
+    location := flag.String("location", "",
+        "a location for the Pluie dans l'heure API, in the form 'lat=48.859333&lon=2.340591'")
     rainColor := flag.String("rain_color", "#268bd2",
         "Color to display text when it's raining")
     flag.Parse()
-    if *weatherCode == "" {
-        weatherCode = nil
+    if *location == "" {
+        location = nil
     }
-    err := main_loop(weatherCode, rainColor)
+    err := main_loop(location, rainColor)
     if err != nil {
         log.Fatal(err)
     }

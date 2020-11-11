@@ -8,11 +8,61 @@ import (
     "strings"
     "syscall"
     "time"
+    "bytes"
 )
-const STATUS_LEN int = 12
+const STATUS_LEN int = 9
 
-func get_status_from_http(code *string) (string, error) {
-    var url string = "http://www.meteofrance.com/mf3-rpc-portlet/rest/pluie/" + *code
+func get_bearer() (string, error) {
+    var url string = "https://meteofrance.com/previsions-meteo-france/"
+
+    clt := http.Client{
+        Timeout: time.Second * 2, // Maximum of 2 secs
+    }
+
+    req, errHttp := http.NewRequest(http.MethodHead, url, nil)
+    if errHttp != nil {
+        return "", errHttp
+    }
+    req.Header.Set("User-Agent", "PluieDansLheureFori3status")
+
+    res, errGet := clt.Do(req)
+    if errGet != nil {
+        return "", errGet
+    }
+
+    setcookie := res.Header.Get("Set-Cookie")
+    if len(setcookie) < 20 {
+        return "", errors.New("set cookie string too short")
+    }
+    if !strings.HasPrefix(setcookie, "mfsession=") {
+        return "", errors.New("set cookie string does not start with mfsession")
+    }
+    setcookie = strings.TrimPrefix(setcookie, "mfsession=")
+    idx := strings.IndexByte(setcookie, ';')
+    if idx < 0 {
+        return "", errors.New("set cookie string does not have a ';'")
+    }
+    buf := bytes.NewBufferString("Bearer ")
+    /* Yes, that's ROT13 … o\ */
+    for i := 0; i < idx; i++ {
+        c := setcookie[i]
+       if c >= 'a' && c <= 'm' || c >= 'A' && c <= 'M' {
+           c += 13
+       } else if c >= 'n' && c <= 'z' || c >= 'N' && c <= 'Z' {
+           c -= 13
+       }
+       buf.WriteByte(c)
+    }
+    return buf.String(), nil
+}
+
+func get_status_from_http(location *string) (string, error) {
+    var url string = "https://rpcache-aa.meteofrance.com/internet2018client/2.0/nowcast/rain?" + *location
+
+    bearer, errBearer := get_bearer()
+    if errBearer != nil {
+        return "", errBearer
+    }
 
     clt := http.Client{
         Timeout: time.Second * 2, // Maximum of 2 secs
@@ -24,6 +74,7 @@ func get_status_from_http(code *string) (string, error) {
     }
 
     req.Header.Set("User-Agent", "PluieDansLheureFori3status")
+    req.Header.Set("Authorization", bearer)
 
     res, errGet := clt.Do(req)
     if errGet != nil {
@@ -40,29 +91,33 @@ func get_status_from_http(code *string) (string, error) {
     if errJson != nil {
         return "", errJson
     }
-    var dataCadran, ok = data["dataCadran"].([]interface{})
-    if !ok {
-        return "", errors.New("can not find 'dataCadran' in JSON")
+    var dataProperties, okP = data["properties"].(map[string]interface{})
+    if !okP {
+        return "", errors.New("can not find 'properties' in JSON")
+    }
+    var dataForecast, okF = dataProperties["forecast"].([]interface{})
+    if !okF {
+        return "", errors.New("can not find 'forecast' in 'properties' in JSON")
     }
     var b strings.Builder
     b.Grow(STATUS_LEN * 4 /* to account for unicode character */)
-    for _, v := range dataCadran {
-        var pluie, ok = v.(map[string]interface{})
+    for _, v := range dataForecast {
+        var rain, ok = v.(map[string]interface{})
         if !ok {
-            return "", errors.New("invalid element in 'dataCadran' in JSON")
+            return "", errors.New("invalid element in 'properties.forecast' in JSON")
         }
-        var niveau, ok2 = pluie["niveauPluie"].(float64)
+        var intensity, ok2 = rain["rain_intensity"].(float64)
         if !ok2 {
-            return "", errors.New("'niveauPluie' not found in sub element in JSON")
+            return "", errors.New("'rain_intensity' not found in sub element in JSON")
         }
         switch {
-        case niveau <= 1:
+        case intensity <= 1:
             b.WriteRune('_')
-        case niveau <= 2:
+        case intensity <= 2:
             b.WriteRune('░')
-        case niveau <= 3:
+        case intensity <= 3:
             b.WriteRune('▒')
-        case niveau <= 4:
+        case intensity <= 4:
             b.WriteRune('▓')
         default:
             b.WriteRune('█')
