@@ -2,12 +2,23 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os/exec"
 )
+
+func readSome(scanner *bufio.Scanner) error {
+	if ok := scanner.Scan(); !ok {
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+		return errors.New("scanner failed")
+	}
+	return nil
+}
 
 func main_loop(location *string, rain_color *string) error {
 	path, lookupErr := exec.LookPath("i3status")
@@ -23,45 +34,56 @@ func main_loop(location *string, rain_color *string) error {
 		return err
 	}
 	scanner := bufio.NewScanner(stdout)
+	if err := readSome(scanner); err != nil {
+		return err
+	}
 
-	/* expect '{"version": 1}' */
-	scannerOk := scanner.Scan()
-	if !scannerOk {
-		return errors.New("scanner failed")
+	header := I3ProtocolHeader{}
+	if err := json.Unmarshal(scanner.Bytes(), &header); err != nil || header.Version != 1 {
+		return errors.New("invalid header " + scanner.Text())
 	}
-	var t string
-	t = scanner.Text()
-	if t != "{\"version\":1}" {
-		return errors.New("invalid header '" + t + "'")
-	}
-	fmt.Println(t)
+	fmt.Println(scanner.Text())
 
-	/* expect '[' */
-	scannerOk2 := scanner.Scan()
-	if !scannerOk2 {
-		return errors.New("scanner failed")
+	if err := readSome(scanner); err != nil {
+		return err
 	}
-	t = scanner.Text()
-	if t != "[" {
-		return errors.New("invalid 2nd line '" + t + "'")
+	if scanner.Text() != "[" {
+		return errors.New("Invalid second line")
 	}
-	fmt.Println(t)
+	fmt.Println("[")
 
 	first := true
-	for scanner.Scan() {
-		text := scanner.Text()
+	for {
+		if err := readSome(scanner); err != nil {
+			return err
+		}
 		if location != nil {
-			weather, errStatus := GetRainI3barFormat(location, rain_color)
-			if errStatus != nil {
-				fmt.Println(text)
-			} else if first {
-				fmt.Println("[" + weather + "," + text[1:])
+			var err error
+			blocks := make([]I3ProtocolBlock, 0)
+			output := make([]byte, 0)
+			if first {
+				err = json.Unmarshal(scanner.Bytes(), &blocks)
 				first = false
 			} else {
-				fmt.Println(",[" + weather + "," + text[2:])
+				err = json.Unmarshal(scanner.Bytes()[1:], &blocks)
+				output = append(output, byte(','))
 			}
+			if err != nil {
+				return errors.New("invalid blocks")
+			}
+			weather, err := GetRainI3barFormat(location, rain_color)
+			if err == nil {
+				blocks = append(blocks, I3ProtocolBlock{})
+				copy(blocks[2:], blocks[1:])
+				blocks[0] = weather
+			}
+			data, err := json.Marshal(blocks)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s%s\n", output, data)
 		} else {
-			fmt.Println(text)
+			fmt.Println(scanner.Text())
 		}
 	}
 

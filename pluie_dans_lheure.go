@@ -200,21 +200,14 @@ func GetRain(location *string) (string, error) {
 	return read_status_from_file_no_lock(f, st.Size())
 }
 
-func GetRainI3barFormat(location *string, rain_color *string) (string, error) {
-	status, rainErr := GetRain(location)
-	if rainErr != nil {
-		return "", rainErr
+func GetRainI3barFormat(location *string, rain_color *string) (block I3ProtocolBlock, err error) {
+	status, err := GetRain(location)
+	if err != nil {
+		return
 	}
-	/* Poor man's json encoder */
-	var b strings.Builder
-	b.WriteString("{\"full_text\":\"")
-	b.WriteString(status)
-	b.WriteString("\"")
+	block.FullText = status
 	if status != "____________" {
-		b.WriteString(",\"color\":\"")
-		b.WriteString(*rain_color)
-		b.WriteString("\"")
+		block.Color = *rain_color
 	}
-	b.WriteString("}")
-	return b.String(), nil
+	return
 }
