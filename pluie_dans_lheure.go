@@ -206,7 +206,7 @@ func GetRainI3barFormat(location *string, rain_color *string) (block I3ProtocolB
 		return
 	}
 	block.FullText = status
-	if status != "____________" {
+	if status != "_________" {
 		block.Color = *rain_color
 	}
 	return
