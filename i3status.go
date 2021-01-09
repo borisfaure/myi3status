@@ -53,36 +53,44 @@ func main_loop(location *string, rain_color *string) error {
 	fmt.Println("[")
 
 	first := true
+	var chWeather = make(chan *I3ProtocolBlock)
 	for {
 		if err := readSome(scanner); err != nil {
 			return err
 		}
-		if location != nil {
-			var err error
-			blocks := make([]I3ProtocolBlock, 0)
-			output := make([]byte, 0)
-			if first {
-				err = json.Unmarshal(scanner.Bytes(), &blocks)
-				first = false
-			} else {
-				err = json.Unmarshal(scanner.Bytes()[1:], &blocks)
-				output = append(output, byte(','))
-			}
-			if err != nil {
-				return errors.New("invalid blocks")
-			}
-			weather, err := GetRainI3barFormat(location, rain_color)
-			if err == nil {
-				blocks = append([]I3ProtocolBlock{weather}, blocks...)
-			}
-			data, err := json.Marshal(blocks)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("%s%s\n", output, data)
+		var err error
+		blocks := make([]I3ProtocolBlock, 0)
+		output := make([]byte, 0)
+		if first {
+			err = json.Unmarshal(scanner.Bytes(), &blocks)
+			first = false
 		} else {
-			fmt.Println(scanner.Text())
+			err = json.Unmarshal(scanner.Bytes()[1:], &blocks)
+			output = append(output, byte(','))
 		}
+		if err != nil {
+			return errors.New("invalid blocks")
+		}
+
+		go func() {
+			weather, err := GetRainI3barFormat(location, rain_color)
+			if err != nil {
+				chWeather <- nil
+			} else {
+				chWeather <- &weather
+			}
+		}()
+
+		weather := <-chWeather
+		if weather != nil {
+			blocks = append([]I3ProtocolBlock{*weather}, blocks...)
+		}
+
+		data, err := json.Marshal(blocks)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s%s\n", output, data)
 	}
 
 	return nil
