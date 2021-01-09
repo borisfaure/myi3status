@@ -73,9 +73,7 @@ func main_loop(location *string, rain_color *string) error {
 			}
 			weather, err := GetRainI3barFormat(location, rain_color)
 			if err == nil {
-				blocks = append(blocks, I3ProtocolBlock{})
-				copy(blocks[2:], blocks[1:])
-				blocks[0] = weather
+				blocks = append([]I3ProtocolBlock{weather}, blocks...)
 			}
 			data, err := json.Marshal(blocks)
 			if err != nil {
