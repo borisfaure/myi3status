@@ -20,7 +20,7 @@ func readSome(scanner *bufio.Scanner) error {
 	return nil
 }
 
-func main_loop(location *string, rain_color *string) error {
+func main_loop(spotify_ctx SpotifyCtx, location *string, rain_color *string) error {
 	path, lookupErr := exec.LookPath("i3status")
 	if lookupErr != nil {
 		return lookupErr
@@ -54,6 +54,7 @@ func main_loop(location *string, rain_color *string) error {
 
 	first := true
 	var chWeather = make(chan *I3ProtocolBlock)
+	var chSpotify = make(chan *I3ProtocolBlock)
 	for {
 		if err := readSome(scanner); err != nil {
 			return err
@@ -81,9 +82,33 @@ func main_loop(location *string, rain_color *string) error {
 			}
 		}()
 
-		weather := <-chWeather
+		go func() {
+			playing, err := spotify_ctx.GetCurrentPlaying()
+			if err != nil {
+				chSpotify <- nil
+			} else {
+				chSpotify <- &playing
+			}
+		}()
+
+		var (
+			found   = 0
+			weather *I3ProtocolBlock
+			playing *I3ProtocolBlock
+		)
+		for found < 2 {
+			select {
+			case weather = <-chWeather:
+				found = found + 1
+			case playing = <-chSpotify:
+				found = found + 1
+			}
+		}
 		if weather != nil {
 			blocks = append([]I3ProtocolBlock{*weather}, blocks...)
+		}
+		if playing != nil {
+			blocks = append([]I3ProtocolBlock{*playing}, blocks...)
 		}
 
 		data, err := json.Marshal(blocks)
@@ -105,7 +130,8 @@ func main() {
 	if *location == "" {
 		location = nil
 	}
-	err := main_loop(location, rainColor)
+	spotify_ctx := NewSpotifyCtx()
+	err := main_loop(spotify_ctx, location, rainColor)
 	if err != nil {
 		log.Fatal(err)
 	}
