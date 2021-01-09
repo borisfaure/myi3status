@@ -176,21 +176,20 @@ func GetRain(location *string) (string, error) {
 
 	var f, openErr = os.OpenFile(file_path, os.O_RDWR|os.O_CREATE, 0644)
 	if openErr != nil {
-		return "", nil
+		return "", openErr
 	}
 	defer f.Close()
 	var fd = f.Fd()
 
 	/* Flock */
-	var flockErr = syscall.Flock(int(fd), syscall.LOCK_EX)
-	if flockErr != nil {
-		return "", nil
+	if err := syscall.Flock(int(fd), syscall.LOCK_EX); err != nil {
+		return "", err
 	}
 	defer syscall.Flock(int(fd), syscall.LOCK_UN)
 
 	var st, statErr = f.Stat()
 	if statErr != nil {
-		return "", nil
+		return "", statErr
 	}
 	var t_hour, t_min, _ int = st.ModTime().Clock()
 	var now_hour, now_min, _ int = time.Now().Clock()
