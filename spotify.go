@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"time"
@@ -26,5 +27,8 @@ func SpotifyGetCurrentPlaying() (block I3ProtocolBlock, err error) {
 	}
 
 	block.FullText = strings.TrimSpace(string(out))
+	if block.FullText == "" {
+		err = errors.New("empty song")
+	}
 	return
 }
