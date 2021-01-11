@@ -1,26 +1,30 @@
 package main
 
 import (
-	"github.com/zmb3/spotify"
+	"context"
+	"os/exec"
+	"strings"
+	"time"
 )
 
-// redirectURI is the OAuth redirect URI for the application.
-// You must register an application at Spotify's developer portal
-// and enter this value.
-const redirectURI = "http://localhost:8531/callback"
+func SpotifyGetCurrentPlaying() (block I3ProtocolBlock, err error) {
+	// Create a new context and add a timeout to it
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
-type SpotifyCtx struct {
-	auth spotify.Authenticator
-}
+	// Create the command with our context
+	cmd := exec.CommandContext(ctx, "spotifyctl", "get")
 
-func NewSpotifyCtx() SpotifyCtx {
-	ctx := SpotifyCtx{}
+	out, err := cmd.Output()
 
-	ctx.auth = spotify.NewAuthenticator(redirectURI, spotify.ScopeUserReadCurrentlyPlaying)
-	return ctx
-}
+	// We want to check the context error to see if the timeout was executed.
+	// The error returned by cmd.Output() will be OS specific based on what
+	// happens when a process is killed.
+	if ctx.Err() == context.DeadlineExceeded {
+		err = ctx.Err()
+		return
+	}
 
-func (spotify_ctx SpotifyCtx) GetCurrentPlaying() (block I3ProtocolBlock, err error) {
-	block.FullText = "Foo - Bar"
+	block.FullText = strings.TrimSpace(string(out))
 	return
 }

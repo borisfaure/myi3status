@@ -20,7 +20,7 @@ func readSome(scanner *bufio.Scanner) error {
 	return nil
 }
 
-func main_loop(spotify_ctx SpotifyCtx, location *string, rain_color *string) error {
+func main_loop(location *string, rain_color *string) error {
 	path, lookupErr := exec.LookPath("i3status")
 	if lookupErr != nil {
 		return lookupErr
@@ -83,7 +83,7 @@ func main_loop(spotify_ctx SpotifyCtx, location *string, rain_color *string) err
 		}()
 
 		go func() {
-			playing, err := spotify_ctx.GetCurrentPlaying()
+			playing, err := SpotifyGetCurrentPlaying()
 			if err != nil {
 				chSpotify <- nil
 			} else {
@@ -130,8 +130,7 @@ func main() {
 	if *location == "" {
 		location = nil
 	}
-	spotify_ctx := NewSpotifyCtx()
-	err := main_loop(spotify_ctx, location, rainColor)
+	err := main_loop(location, rainColor)
 	if err != nil {
 		log.Fatal(err)
 	}
