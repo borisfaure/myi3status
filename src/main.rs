@@ -6,15 +6,17 @@ use tokio::{
     process::Command,
 };
 
+mod spotify;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct I3ProtocolHeader {
     version: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct I3ProtocolBlock {
-    name: String,
-    full_text: String,
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct I3ProtocolBlock {
+    pub name: String,
+    pub full_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     instance: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,12 +48,6 @@ async fn get_rain_i3bar_format(_location: String, _rain_color: String) -> Option
     // Implement this function to get weather data
     // Return Some(I3ProtocolBlock) or None
     None // Placeholder
-}
-
-async fn spotify_get_current_playing() -> Option<I3ProtocolBlock> {
-    // Implement this function to get Spotify data
-    // Return Some(I3ProtocolBlock) or None
-    None // Placeho lder
 }
 
 #[tokio::main]
@@ -93,7 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mut blocks: Vec<I3ProtocolBlock> = serde_json::from_str(&line)?;
 
         let rain = get_rain_i3bar_format(location.clone(), rain_color.clone()).await;
-        let song = spotify_get_current_playing().await;
+        let song = spotify::get_current_playing().await;
 
         if let Some(rain) = rain {
             blocks.insert(0, rain);
