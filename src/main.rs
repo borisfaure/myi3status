@@ -6,6 +6,7 @@ use tokio::{
     process::Command,
 };
 
+mod pluie_dans_lheure;
 mod spotify;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,12 +43,6 @@ fn build_cli() -> ClapCommand {
                 .num_args(1)
                 .default_value("#268bd2"),
         )
-}
-
-async fn get_rain_i3bar_format(_location: String, _rain_color: String) -> Option<I3ProtocolBlock> {
-    // Implement this function to get weather data
-    // Return Some(I3ProtocolBlock) or None
-    None // Placeholder
 }
 
 #[tokio::main]
@@ -88,7 +83,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         let mut blocks: Vec<I3ProtocolBlock> = serde_json::from_str(&line)?;
 
-        let rain = get_rain_i3bar_format(location.clone(), rain_color.clone()).await;
+        let rain =
+            pluie_dans_lheure::get_rain_i3bar_format(location.clone(), rain_color.clone()).await;
         let song = spotify::get_current_playing().await;
 
         if let Some(rain) = rain {
