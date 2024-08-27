@@ -1,4 +1,4 @@
-A wrapper on i3status written in go
+A wrapper on i3status written in go and rust
 
 
 Main Feature
