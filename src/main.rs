@@ -30,9 +30,16 @@ pub struct I3ProtocolBlock {
 fn build_cli() -> ClapCommand {
     ClapCommand::new("i3status_rust")
         .arg(
-            Arg::new("location")
-                .long("location")
-                .help("Location for the Pluie dans l'heure API")
+            Arg::new("location-lat")
+                .long("location-lat")
+                .help("Location latitude for the Pluie dans l'heure API")
+                .num_args(1)
+                .required(true),
+        )
+        .arg(
+            Arg::new("location-lon")
+                .long("location-lon")
+                .help("Location longitude for the Pluie dans l'heure API")
                 .num_args(1)
                 .required(true),
         )
@@ -48,7 +55,8 @@ fn build_cli() -> ClapCommand {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let matches = build_cli().get_matches();
-    let location = matches.get_one::<String>("location").unwrap();
+    let location_lat: f64 = matches.get_one::<String>("location-lat").unwrap().parse()?;
+    let location_lon: f64 = matches.get_one::<String>("location-lon").unwrap().parse()?;
     let rain_color = matches.get_one::<String>("rain_color").unwrap();
 
     let mut cmd = Command::new("i3status")
@@ -83,8 +91,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         let mut blocks: Vec<I3ProtocolBlock> = serde_json::from_str(&line)?;
 
-        let rain =
-            pluie_dans_lheure::get_rain_i3bar_format(location.clone(), rain_color.clone()).await;
+        let rain = pluie_dans_lheure::get_rain_i3bar_format(
+            location_lat,
+            location_lon,
+            rain_color.clone(),
+        )
+        .await;
         let song = spotify::get_current_playing().await;
 
         if let Some(rain) = rain {

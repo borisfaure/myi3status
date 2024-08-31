@@ -2,7 +2,7 @@ use crate::I3ProtocolBlock;
 use anyhow::{anyhow, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, SET_COOKIE, USER_AGENT};
 use serde_json::Value;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -50,10 +50,10 @@ async fn get_bearer() -> Result<String> {
     Ok(format!("Bearer {}", rot13_encoded))
 }
 
-async fn get_status_from_http(location: String) -> Result<String> {
+async fn get_status_from_http(lat: f64, lon: f64) -> Result<String> {
     let url = format!(
-        "https://rpcache-aa.meteofrance.com/internet2018client/2.0/nowcast/rain?{}",
-        location
+        "https://rpcache-aa.meteofrance.com/internet2018client/2.0/nowcast/rain?lat={}&lon={}",
+        lat, lon
     );
     let bearer = get_bearer().await?;
     let client = reqwest::Client::new();
@@ -97,15 +97,16 @@ async fn get_status_from_http(location: String) -> Result<String> {
     Ok(rain)
 }
 
-async fn need_new_status(file: &mut File, location: String) -> Result<String> {
-    let status = get_status_from_http(location).await?;
+async fn need_new_status(file: &mut File, lat: f64, lon: f64) -> Result<String> {
+    let status = get_status_from_http(lat, lon).await?;
     file.set_len(0).await?;
-    file.write_all(status.as_bytes()).await?;
+    let bytes = status.as_bytes();
+    file.write_all(bytes).await?;
     file.sync_all().await?;
     Ok(status)
 }
 
-async fn get_rain_string(location: String) -> Result<String> {
+async fn get_rain_string(lat: f64, lon: f64) -> Result<String> {
     // Open file for reading and writing, creating it if it doesn't exist
     // If the file is too small or too old, fetch a new status
     let mut file = File::options()
@@ -118,24 +119,25 @@ async fn get_rain_string(location: String) -> Result<String> {
 
     let metadata = file.metadata().await?;
     let modified = metadata.modified()?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    let duration = SystemTime::now().duration_since(modified)?.as_secs();
 
-    if metadata.len() < STATUS_LEN as u64
-        || now.as_secs() - modified.duration_since(UNIX_EPOCH)?.as_secs() > 300
-    {
-        need_new_status(&mut file, location).await
+    if metadata.len() < STATUS_LEN as u64 || duration > 300 {
+        need_new_status(&mut file, lat, lon).await
     } else {
-        let mut status: Vec<u8> = Vec::with_capacity(STATUS_LEN);
+        let mut status: Vec<u8> = Vec::with_capacity(metadata.len() as usize);
         file.read_to_end(&mut status).await?;
-        Ok(status.iter().map(|&c| c as char).collect::<String>())
+        String::from_utf8(status)
+            .map_err(Into::into)
+            .map(|s| s.trim().to_string())
     }
 }
 
 pub async fn get_rain_i3bar_format(
-    location: String,
+    lat: f64,
+    lon: f64,
     rain_color: String,
 ) -> Option<I3ProtocolBlock> {
-    let status = get_rain_string(location).await.ok()?;
+    let status = get_rain_string(lat, lon).await.ok()?;
 
     Some(I3ProtocolBlock {
         name: "pluie_dans_lheure".to_string(),
